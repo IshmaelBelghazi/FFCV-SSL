@@ -46,7 +46,7 @@ setup(name='ffcv-ssl',
       long_description_content_type='text/markdown',
       ext_modules=[libffcv],
       install_requires=[
-          'terminaltables',
+            'terminaltables',
             'pytorch_pfn_extras',
             'fastargs',
             'matplotlib',

@@ -105,6 +105,7 @@ class Loader:
         batches_ahead: int = 3,
         recompile: bool = False,  # Recompile at every epoch
         custom_field_mapper: int = None,
+        order_kwargs: dict = dict()
     ):
 
         # We store the original user arguments to be able to pass it to the
@@ -156,7 +157,12 @@ class Loader:
         else:
             self.memory_manager: MemoryManager = ProcessCacheManager(self.reader)
 
-        self.traversal_order: TraversalOrder = ORDER_MAP[order](self)
+        if order in ORDER_MAP:
+            self.traversal_order: TraversalOrder = ORDER_MAP[order](self)
+        elif issubclass(order, TraversalOrder):
+            self.traversal_order: TraversalOrder = order(self, **order_kwargs)
+        else:
+            raise ValueError(f"Order {order} is not a supported order type or a subclass of TraversalOrder")
 
         memory_read = self.memory_manager.compile_reader()
         self.next_epoch: int = 0
