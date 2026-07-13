@@ -48,7 +48,7 @@ setup(name='ffcv-ssl',
       install_requires=[
             'terminaltables',
             "numpy>=2.0,<=2.3",
-            "pillow-simd>=9.5.0.post2",
+            "Pillow>=12.3.0",
             'pytorch_pfn_extras',
             'fastargs',
             'matplotlib',
