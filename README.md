@@ -8,12 +8,27 @@
 Please refer to the original [FFCV library](https://github.com/libffcv/ffcv) to generate the dataset .beton files.
 
 # Installation
+
+This fork uses uv 0.12.15, Python 3.12 and NumPy 2.4. Install a C++ compiler,
+`pkg-config`, OpenCV core/imgproc development headers (OpenCV 4 or 5), and
+libjpeg-turbo development headers before building the native extension.
+The Python `opencv-contrib-python` wheel supplies `cv2`; it does not supply
+these system build dependencies.
+
+```bash
+uv pip install -e .                  # CPU runtime
+uv pip install -e '.[cuda12,test]'   # CUDA 12 runtime and tests
+uv pip install -e '.[cuda13,test]'   # CUDA 13 runtime and tests
 ```
-conda create -y -n ffcv-ssl python=3.9 cupy pkg-config compilers libjpeg-turbo opencv pytorch torchvision torchaudio pytorch-cuda=11.7 numba -c pytorch -c nvidia -c conda-forge
-conda activate ffcv-ssl
-pip install -e .
-```
-Troubleshooting note: if the above commands result in a package conflict error, try running ``conda config --env --set channel_priority flexible`` in the environment and rerunning the installation command.
+
+Select only one CUDA extra. `examples`, `benchmarks`, and `webdataset` provide
+optional dependencies for those uses. MKL is selected by the consuming LIFE
+project, not by this library. When the system OpenCV ABI changes, clear the
+FFCV wheel cache and rebuild on the target OS. For deployment, install without
+`-e` so the compiled extension is packaged inside the environment.
+
+LIFE pins this package to a private Git commit over SSH. Its explicit
+`SOURCE_MODE=editable` install option uses a sibling checkout for development.
 
 # What's new <a name="introduction"></a>
 

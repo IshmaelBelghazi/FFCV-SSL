@@ -3,16 +3,17 @@ from __future__ import annotations
 import ctypes
 import re
 import subprocess
-from importlib.metadata import distributions
+from importlib.util import find_spec
 from pathlib import Path
 
 
 def native_extension() -> Path:
-    for package in distributions(name="ffcv-ssl"):
-        package_dir = Path(package.locate_file("ffcv"))
-        extensions = list(package_dir.glob("_libffcv*.so"))
-        if extensions:
-            return extensions[0]
+    package = find_spec("ffcv")
+    if package is not None:
+        for location in package.submodule_search_locations or ():
+            extensions = list(Path(location).glob("_libffcv*.so"))
+            if extensions:
+                return extensions[0]
     raise FileNotFoundError("ffcv._libffcv is not installed")
 
 
