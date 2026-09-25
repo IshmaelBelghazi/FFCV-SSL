@@ -2,6 +2,37 @@
 requires = ["setuptools>=80.9.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[project]
+name = "ffcv-ssl"
+version = "0.0.3rc3"
+description = "Fast Forward Computer Vision for Self-Supervised Learning"
+readme = "README.md"
+requires-python = ">=3.13,<3.15"
+dependencies = [
+  "numpy>=2.4,<2.5", "numba>=0.65.1", "torch", "Pillow>=12.3.0", "scipy", "tqdm",
+]
+license-files = ["LICENSE"]
+
+[project.optional-dependencies]
+test = ["pytest", "assertpy", "psutil", "torchvision", "webdataset"]
+examples = ["fastargs", "matplotlib", "submitit", "torchmetrics", "torchvision"]
+benchmarks = ["terminaltables", "pandas", "assertpy"]
+webdataset = ["webdataset"]
+cuda12 = ["cupy-cuda12x", "pytorch-pfn-extras"]
+cuda13 = ["cupy-cuda13x", "pytorch-pfn-extras"]
+# Standalone use only: the workspace supplies cv2 from the Nix OpenCV build and never selects this extra.
+opencv = ["opencv-contrib-python>=4.13.0.90"]
+
+[project.urls]
+Repository = "https://github.com/IshmaelBelghazi/FFCV-SSL"
+[tool.setuptools.packages.find]
+include = ["ffcv*"]
+
 [tool.uv]
-required-version = "==0.12.15"
+required-version = ">=0.12.15,<0.13"
 conflicts = [[{ extra = "cuda12" }, { extra = "cuda13" }]]
+# These keys belong to FFCV, not the parent project.
+cache-keys = [
+  { file = "pyproject.toml" }, { file = "setup.py" }, { file = "libffcv/**/*" },
+  { env = "LIFE_NATIVE_FINGERPRINT" }, { env = "CXX" }, { env = "CFLAGS" },
+]
