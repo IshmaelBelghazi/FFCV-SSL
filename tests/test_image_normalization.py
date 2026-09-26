@@ -1,3 +1,4 @@
+from ffcv.fields.basics import IntDecoder
 import numpy as np
 import torch as ch
 from torch.utils.data import Dataset
@@ -9,7 +10,7 @@ from tqdm import tqdm
 from ffcv.writer import DatasetWriter
 from ffcv.fields import IntField, RGBImageField
 from ffcv.fields.decoders import SimpleRGBImageDecoder
-from ffcv.loader import Loader
+from ffcv.loader import Loader, OrderOption
 from ffcv.pipeline.compiler import Compiler
 from ffcv.transforms import ToTorchImage, ToTensor, NormalizeImage, View, ToDevice
 
@@ -47,6 +48,7 @@ def test_cpu_normalization():
         writer.from_indexed_dataset(dataset, chunksize=5)
         loader = Loader(name, batch_size=5, num_workers=2,
         pipelines={
+            'index': [IntDecoder(), ToTensor()],
             'value': [
                 SimpleRGBImageDecoder(),
                 NormalizeImage(mean, std, np.float16),
@@ -54,7 +56,7 @@ def test_cpu_normalization():
                 ToTensor(),
                 ToTorchImage(),
             ]
-        })
+        }, order=OrderOption.SEQUENTIAL)
         ix = 0
         for res in tqdm(loader):
             index, images  = res
@@ -86,6 +88,7 @@ def test_gpu_normalization():
 
         loader = Loader(name, batch_size=5, num_workers=2,
         pipelines={
+            'index': [IntDecoder(), ToTensor()],
             'value': [
                 SimpleRGBImageDecoder(),
                 ToTensor(),
@@ -94,7 +97,7 @@ def test_gpu_normalization():
                 NormalizeImage(mean, std, np.float16),
                 View(ch.float16),
             ]
-        })
+        }, order=OrderOption.SEQUENTIAL)
         ix = 0
         for res in tqdm(loader):
             _, images  = res

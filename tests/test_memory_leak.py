@@ -1,3 +1,4 @@
+from ffcv.loader import OrderOption
 import os
 from tempfile import NamedTemporaryFile
 from time import sleep, time
@@ -50,7 +51,7 @@ def create_and_run(num_samples, size_bytes):
         process = psutil.Process(os.getpid())
         assert_that(process.memory_info().rss).is_less_than(total_dataset_size)
         
-        loader = Loader(name, 128, 10)
+        loader = Loader(name, 128, num_workers=10, order=OrderOption.SEQUENTIAL)
         for _ in tqdm(loader):
             assert_that(process.memory_info().rss).is_less_than(total_dataset_size)
 

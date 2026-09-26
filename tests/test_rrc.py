@@ -1,3 +1,4 @@
+from ffcv.fields.basics import IntDecoder
 from ffcv.transforms.ops import ToTensor
 from ffcv.fields.rgb_image import RandomResizedCropRGBImageDecoder, SimpleRGBImageDecoder, CenterCropRGBImageDecoder
 import numpy as np
@@ -10,7 +11,7 @@ from torch.utils.data import Subset
 
 from ffcv.writer import DatasetWriter
 from ffcv.fields import IntField, RGBImageField
-from ffcv.loader import Loader
+from ffcv.loader import Loader, OrderOption
 from ffcv.pipeline.compiler import Compiler
 
 class DummyDataset(Dataset):
@@ -53,8 +54,9 @@ def create_and_validate(length, decoder, size, mode='raw', compile=False):
         
         loader = Loader(name, batch_size=5, num_workers=2,
                         pipelines={
+                            'index': [IntDecoder(), ToTensor()],
                             'value': [decoder, ToTensor()]
-                        })
+                        }, order=OrderOption.SEQUENTIAL)
         
         for index, images in loader:
             for i, image in zip(index, images):

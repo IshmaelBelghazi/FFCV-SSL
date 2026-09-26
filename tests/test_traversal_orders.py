@@ -1,4 +1,5 @@
 from collections import defaultdict
+import os
 from tempfile import TemporaryDirectory
 from os import path
 from typing import Counter
@@ -14,6 +15,8 @@ from ffcv.loader.loader import ORDER_TYPE, OrderOption
 from ffcv.writer import DatasetWriter
 from ffcv.fields import IntField, BytesField
 from ffcv import Loader
+from ffcv.fields.basics import IntDecoder
+from ffcv.transforms import ToTensor
 
 class DummyDataset(Dataset):
 
@@ -32,10 +35,15 @@ class DummyDataset(Dataset):
 def process_work(rank, world_size, fname, order, sync_fname, out_folder, indices):
     sync_url = f'file://{sync_fname}'
     if world_size > 1:
-        init_process_group('nccl', sync_url, rank=rank, world_size=world_size)
+        # Only DistributedSampler's rank/world size are needed: gloo runs on any host,
+        # while nccl needs one GPU per rank.
+        init_process_group('gloo', sync_url, rank=rank, world_size=world_size)
     
-    loader = Loader(fname, 8, num_workers=2, order=order, drop_last=False,
-                    distributed=world_size > 1, indices=indices)
+    # Every rank must shuffle with the same seed for DistributedSampler's shards to
+    # partition the epoch; Loader otherwise draws a fresh seed per process.
+    loader = Loader(fname, 8, num_workers=2, order=order, drop_last=False, seed=17,
+                    distributed=world_size > 1, indices=indices,
+                    pipelines={'index': [IntDecoder(), ToTensor()], 'value': None})
     
     result = []
     for _ in range(3):
@@ -65,7 +73,16 @@ def prep_and_run_test(num_workers, order, with_indices=False):
                 
             args = (num_workers, name, order, sync_file, folder, indices)
             if num_workers > 1:
-                spawn(process_work, nprocs=num_workers, args=args)
+                # Spawned ranks import torch (and its libgomp) before numpy, and MKL's
+                # default Intel threading layer then refuses to load; the role images
+                # set GNU for the same reason.
+                previous = os.environ.get('MKL_THREADING_LAYER')
+                os.environ['MKL_THREADING_LAYER'] = previous or 'GNU'
+                try:
+                    spawn(process_work, nprocs=num_workers, args=args)
+                finally:
+                    if previous is None:
+                        del os.environ['MKL_THREADING_LAYER']
             else:
                 process_work(*((0, ) + args))
             

@@ -14,9 +14,12 @@ from ffcv.fields.rgb_image import SimpleRGBImageDecoder
 
 from ffcv.writer import DatasetWriter
 from ffcv.fields import IntField, RGBImageField
-from ffcv.loader import Loader
+from ffcv.loader import Loader, OrderOption
 from ffcv.pipeline.compiler import Compiler
 from ffcv.transforms import *
+# ffcv.transforms.RandomResizedCrop is a decoder in this fork; the post-decode
+# operation this test exercises lives in its own module.
+from ffcv.transforms.random_resized_crop import RandomResizedCrop as RandomResizedCropOp
 
 SAVE_IMAGES = True
 IMAGES_TMP_PATH = '/tmp/ffcv_augtest_output'
@@ -48,12 +51,12 @@ def run_test(length, pipeline, compile=False):
             'image': pipeline,
             'label': [IntDecoder(), ToTensor(), Squeeze()]
         },
-        drop_last=False)
+        drop_last=False, order=OrderOption.SEQUENTIAL)
 
         unaugmented_loader = Loader(name, batch_size=7, num_workers=2, pipelines={
             'image': UNAUGMENTED_PIPELINE,
             'label': [IntDecoder(), ToTensor(), Squeeze()]
-        }, drop_last=False)
+        }, drop_last=False, order=OrderOption.SEQUENTIAL)
 
         tot_indices = 0
         tot_images = 0
@@ -132,9 +135,9 @@ def test_random_resized_crop():
     for comp in [True, False]:
         run_test(100, [
             SimpleRGBImageDecoder(),
-            RandomResizedCrop(scale=(0.08, 1.0), 
-                            ratio=(0.75, 4/3),
-                            size=32),
+            RandomResizedCropOp(scale=(0.08, 1.0),
+                                ratio=(0.75, 4/3),
+                                size=32),
             ToTensor(),
             ToTorchImage()
         ], comp)

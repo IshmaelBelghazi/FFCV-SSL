@@ -18,6 +18,31 @@ from .types import (TYPE_ID_HANDLER, get_metadata_type, HeaderType,
 
 MIN_PAGE_SIZE = 1 << 21  # 2MiB, which is the most common HugePage size
 
+
+def _raise_if_workers_failed(processes):
+    """Workers exit only after their last chunk; a non-zero exit code means a crash."""
+    failed = [(p.pid, p.exitcode) for p in processes
+              if p.exitcode is not None and p.exitcode != 0]
+    if failed:
+        raise RuntimeError(f"DatasetWriter worker(s) failed (pid, exit code): {failed}; "
+                           "see the worker traceback above")
+
+
+def _get_from_workers(queue, processes, poll_seconds=1.0):
+    """queue.get() that stops waiting if a worker dies instead of blocking forever."""
+    from queue import Empty
+    while True:
+        try:
+            return queue.get(timeout=poll_seconds)
+        except Empty:
+            _raise_if_workers_failed(processes)
+            if not any(p.is_alive() for p in processes):
+                # A clean exit flushes the queue first, so one last read settles the race.
+                try:
+                    return queue.get(timeout=poll_seconds)
+                except Empty:
+                    raise RuntimeError("DatasetWriter workers exited without reporting allocations")
+
 def from_shard(shard, pipeline):
     # We import webdataset here so that it desn't crash if it's not required
     # (Webdataset is an optional depdency)
@@ -240,22 +265,37 @@ class DatasetWriter():
         for p in processes: p.start()
         # Wait for all the workers to be done
 
-        # Display progress
+        # Display progress. A worker that dies (an exception in encode, a native
+        # crash) never increments `done_number`, so every wait below also checks
+        # that the workers are still alive; otherwise the parent spins forever.
         progress = tqdm(total=self.num_samples)
         previous = 0
-        while previous != self.num_samples:
-            val = done_number.value
-            diff = val - previous
-            if diff > 0:
-                progress.update(diff)
-            previous = val
-            sleep(0.1)
-        progress.close()
+        try:
+            while previous != self.num_samples:
+                _raise_if_workers_failed(processes)
+                val = done_number.value
+                diff = val - previous
+                if diff > 0:
+                    progress.update(diff)
+                previous = val
+                sleep(0.1)
+            progress.close()
 
-        # Wait for all the workers to be done and get their allocations
-        for p in processes:
-            content = allocations_queue.get()
-            allocation_list.extend(content)
+            # Wait for all the workers to be done and get their allocations
+            for p in processes:
+                allocation_list.extend(_get_from_workers(allocations_queue, processes))
+            for p in processes:
+                p.join()
+        except BaseException:
+            progress.close()
+            for p in processes:
+                if p.is_alive():
+                    p.terminate()
+            for p in processes:
+                p.join()
+            self.metadata_sm.close()
+            self.metadata_sm.unlink()
+            raise
 
         self.finalize(allocation_list)
         self.metadata_sm.close()

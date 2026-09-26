@@ -15,7 +15,7 @@ from ffcv.transforms.ops import ToTensor
 
 from ffcv.writer import DatasetWriter
 from ffcv.reader import Reader
-from ffcv.loader import Loader
+from ffcv.loader import Loader, OrderOption
 from ffcv.fields import IntField, FloatField, BytesField
 from ffcv.fields.basics import FloatDecoder
 from ffcv.pipeline.state import State
@@ -56,7 +56,7 @@ def test_basic_simple():
                         pipelines={
                             'value': [FloatDecoder(), Doubler(), ToTensor()],
                             'index': None
-                        })
+                        }, order=OrderOption.SEQUENTIAL)
 
         it = iter(loader)
         result = next(it)
