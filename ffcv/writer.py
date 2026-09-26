@@ -1,5 +1,6 @@
 from functools import partial
 from typing import Callable, List, Mapping
+import os
 from os import SEEK_END, path
 import numpy as np
 from time import sleep
@@ -17,6 +18,25 @@ from .types import (TYPE_ID_HANDLER, get_metadata_type, HeaderType,
 
 
 MIN_PAGE_SIZE = 1 << 21  # 2MiB, which is the most common HugePage size
+
+
+def _hold_numba_compiler_lock_across_fork():
+    """Workers are forked, and they compile numba code (e.g. RGBImageField.encode).
+
+    If another thread holds numba's global compiler lock at fork time (a loader's
+    EpochIterator compiling or running a pipeline), the child inherits the lock held
+    by a thread that does not exist there and blocks forever on its first compile.
+    Taking the lock in the forking thread around fork() hands the child a lock it
+    owns and releases (the logging module guards its locks the same way).
+    """
+    from numba.core.compiler_lock import global_compiler_lock
+    lock = global_compiler_lock._lock
+    os.register_at_fork(before=lock.acquire,
+                        after_in_parent=lock.release,
+                        after_in_child=lock.release)
+
+
+_hold_numba_compiler_lock_across_fork()
 
 
 def _raise_if_workers_failed(processes):
