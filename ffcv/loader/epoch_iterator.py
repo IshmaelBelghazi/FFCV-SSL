@@ -19,6 +19,12 @@ QUASIRANDOM_ERROR_MSG = '''Not enough memory; try setting quasi-random ordering
 (`OrderOption.QUASI_RANDOM`) in the dataloader constructor's `order` argument.
 '''
 
+class _PipelineFailure:
+    """Carries an exception from the loading thread to the consumer."""
+    def __init__(self, error: BaseException):
+        self.error = error
+
+
 class EpochIterator(Thread):
     def __init__(self, loader: "Loader", order: Sequence[int]):
         super().__init__(daemon=True)
@@ -83,16 +89,8 @@ class EpochIterator(Thread):
                 slot = self.current_batch_slot
                 self.current_batch_slot = (slot + 1) % (self.loader.batches_ahead + 2)
                 result = self.run_pipeline(b_ix, ixes, slot, events[slot], slot)
-                to_output = (slot, result)
-                while True:
-                    try:
-                        self.output_queue.put(to_output, block=True, timeout=0.5)
-                        break
-                    except Full:
-                        pass
-
-                    if self.terminate_event.is_set():
-                        return
+                if not self._put((slot, result)):
+                    return
                 if IS_CUDA:
                     # We were able to submit this batch
                     # Therefore it means that the user must have entered the for loop for
@@ -109,7 +107,22 @@ class EpochIterator(Thread):
                     b_ix += 1
 
         except StopIteration:
-            self.output_queue.put(None)
+            self._put(None)
+        except BaseException as error:
+            # Without this the thread dies silently and __next__ waits forever on
+            # the queue (a pipeline or compilation error looked like a deadlock).
+            self._put(_PipelineFailure(error))
+
+    def _put(self, item) -> bool:
+        """Block until the consumer takes `item`; False if the iterator was closed."""
+        while True:
+            try:
+                self.output_queue.put(item, block=True, timeout=0.5)
+                return True
+            except Full:
+                pass
+            if self.terminate_event.is_set():
+                return False
 
     def run_pipeline(self, b_ix, batch_indices, batch_slot, cuda_event, slot):
         self.memory_context.start_batch(b_ix)
@@ -151,6 +164,9 @@ class EpochIterator(Thread):
         if result is None:
             self.close()
             raise StopIteration()
+        if isinstance(result, _PipelineFailure):
+            self.close()
+            raise result.error
         slot, result = result
         if IS_CUDA:
             stream = self.cuda_streams[slot]
