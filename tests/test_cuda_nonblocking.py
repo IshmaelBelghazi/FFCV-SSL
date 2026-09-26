@@ -41,40 +41,45 @@ def run_experiment_cuda(weight, loader, sync=False):
 
     return total.sum(0)
 
-def run_cuda(weight, sync):
-    n_samples, shape = (2048 * 10, (50000,))
-    with NamedTemporaryFile() as handle:
-        name = handle.name
-        dataset = DummyArrayDataset(n_samples, shape)
-        writer = DatasetWriter(name, {
-            'mask': NDArrayField(dtype=np.dtype('bool'), shape=(50_000,)),
-            'targets': NDArrayField(dtype=np.dtype('float32'), shape=(50_000,)),
-            'idx': IntField()
-        })
+def write_dataset(name):
+    n_samples = 2048 * 10
+    writer = DatasetWriter(name, {
+        'mask': NDArrayField(dtype=np.dtype('bool'), shape=(50_000,)),
+        'targets': NDArrayField(dtype=np.dtype('float32'), shape=(50_000,)),
+        'idx': IntField()
+    })
+    writer.from_indexed_dataset(DummyArrayDataset(n_samples, (50000,)))
+    return n_samples
 
-        writer.from_indexed_dataset(dataset)
+def run_cuda(weight, name, n_samples, sync):
+    loader = Loader(
+            name,
+            batch_size=2048,
+            num_workers=10,
+            order=OrderOption.QUASI_RANDOM,
+            # One traversal for every run: only sync vs async differs, otherwise the
+            # float32 sums (~1e7) change with batch composition beyond the tolerance.
+            seed=0,
+            indices=np.arange(n_samples),
+            drop_last=False,
+            os_cache=True,
+            pipelines={
+                'mask': [NDArrayDecoder(), ToTensor(), ToDevice(ch.device('cuda:0'), non_blocking=False)],
+                'targets': [NDArrayDecoder(), ToTensor(), ToDevice(ch.device('cuda:0'), non_blocking=False)],
+                'idx': [IntDecoder(), ToTensor(), Squeeze(), ToDevice(ch.device('cuda:0'), non_blocking=False)]
+            })
 
-        loader = Loader(
-                name,
-                batch_size=2048,
-                num_workers=10,
-                order=OrderOption.QUASI_RANDOM,
-                indices=np.arange(n_samples),
-                drop_last=False,
-                os_cache=True,
-                pipelines={
-                    'mask': [NDArrayDecoder(), ToTensor(), ToDevice(ch.device('cuda:0'), non_blocking=False)],
-                    'targets': [NDArrayDecoder(), ToTensor(), ToDevice(ch.device('cuda:0'), non_blocking=False)],
-                    'idx': [IntDecoder(), ToTensor(), Squeeze(), ToDevice(ch.device('cuda:0'), non_blocking=False)]
-                })
-        
-        return run_experiment_cuda(weight, loader, sync)
+    return run_experiment_cuda(weight, loader, sync)
 
 def test_cuda():
     weight = ch.randn(50_000, 50_000).cuda()
-    async_1 = run_cuda(weight, False)
-    sync_1 = run_cuda(weight, True)
-    sync_2 = run_cuda(weight, True)
+    # The three runs compare async and sync transfers of the same data, so the
+    # (multi-GB) dataset is written once instead of once per run.
+    with NamedTemporaryFile() as handle:
+        n_samples = write_dataset(handle.name)
+        async_1 = run_cuda(weight, handle.name, n_samples, False)
+        sync_1 = run_cuda(weight, handle.name, n_samples, True)
+        sync_2 = run_cuda(weight, handle.name, n_samples, True)
     print(async_1)
     print(sync_1)
     print(sync_2)
