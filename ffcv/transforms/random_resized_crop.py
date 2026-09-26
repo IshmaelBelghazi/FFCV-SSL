@@ -28,7 +28,8 @@ class RandomResizedCrop(Operation):
         self.size = size
 
     def generate_code(self) -> Callable:
-        scale, ratio = self.scale, self.ratio
+        # numba cannot apply np.log to a tuple; the decoders convert the same way.
+        scale, ratio = np.array(self.scale), np.array(self.ratio)
         def random_resized_crop(im, dst):
             i, j, h, w = fast_crop.get_random_crop(im.shape[0],
                                                 im.shape[1],
