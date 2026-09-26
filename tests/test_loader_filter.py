@@ -1,3 +1,4 @@
+from ffcv.fields.basics import IntDecoder
 from dataclasses import replace
 import torch as ch
 from ffcv.pipeline.allocation_query import AllocationQuery
@@ -15,7 +16,7 @@ from ffcv.transforms.ops import ToTensor
 
 from ffcv.writer import DatasetWriter
 from ffcv.reader import Reader
-from ffcv.loader import Loader
+from ffcv.loader import Loader, OrderOption
 from ffcv.fields import IntField, FloatField, BytesField
 from ffcv.fields.basics import FloatDecoder
 from ffcv.pipeline.state import State
@@ -54,8 +55,9 @@ def test_basic_simple():
 
         loader = Loader(file_name, batch_size, num_workers=5, seed=17,
                         pipelines={
+                            'index': [IntDecoder(), ToTensor()],
                             'value': [FloatDecoder(), Doubler(), ToTensor()],
-                        })
+                        }, order=OrderOption.SEQUENTIAL)
 
         def cond(value):
             value = value[0]

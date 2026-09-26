@@ -1,3 +1,4 @@
+from ffcv.loader import OrderOption
 from ctypes import pointer
 from tempfile import NamedTemporaryFile
 from collections import defaultdict
@@ -9,6 +10,9 @@ from torch.utils.data import Dataset
 from ffcv import DatasetWriter
 from ffcv.fields import IntField, NDArrayField
 from ffcv import Loader
+from ffcv.fields.basics import IntDecoder
+from ffcv.fields.decoders import NDArrayDecoder
+from ffcv.transforms import ToTensor
 
 class DummyActivationsDataset(Dataset):
 
@@ -54,7 +58,7 @@ def run_test(n_samples, shape):
 
         writer.from_indexed_dataset(dataset)
 
-        loader = Loader(name, batch_size=3, num_workers=5)
+        loader = Loader(name, batch_size=3, num_workers=5, pipelines={'index': [IntDecoder(), ToTensor()], 'activations': [NDArrayDecoder(), ToTensor()]}, order=OrderOption.SEQUENTIAL)
         for ixes, activations in loader:
             for ix, activation in zip(ixes, activations):
                 assert_that(np.all(dataset[ix][1] == activation.numpy())).is_true()
@@ -80,7 +84,7 @@ def test_multi_fields():
 
         writer.from_indexed_dataset(dataset)
 
-        loader = Loader(name, batch_size=3, num_workers=5)
+        loader = Loader(name, batch_size=3, num_workers=5, pipelines={'index': [IntDecoder(), ToTensor()], **{name: [NDArrayDecoder(), ToTensor()] for name in ('activations', 'activations2', 'activations3')}}, order=OrderOption.SEQUENTIAL)
         page_size_l2 = int(np.log2(loader.reader.page_size))
         sample_ids = loader.reader.alloc_table['sample_id']
         pointers = loader.reader.alloc_table['ptr']

@@ -8,7 +8,10 @@ from torch.utils.data import Subset
 
 from ffcv.writer import DatasetWriter
 from ffcv.fields import IntField, RGBImageField
-from ffcv.loader import Loader
+from ffcv.loader import Loader, OrderOption
+from ffcv.fields.basics import IntDecoder
+from ffcv.fields.rgb_image import SimpleRGBImageDecoder
+from ffcv.transforms import ToTensor
 from ffcv.pipeline.compiler import Compiler
 
 class DummyDataset(Dataset):
@@ -56,7 +59,7 @@ def create_and_validate(length, mode='raw', reversed=False):
             
         Compiler.set_enabled(False)
         
-        loader = Loader(name, batch_size=5, num_workers=2)
+        loader = Loader(name, batch_size=5, num_workers=2, pipelines={'index': [IntDecoder(), ToTensor()], 'value': [SimpleRGBImageDecoder(), ToTensor()]}, order=OrderOption.SEQUENTIAL)
         
         for res in loader:
             if not reversed:
@@ -85,7 +88,7 @@ def make_and_read_cifar_subset(length):
 
         Compiler.set_enabled(False)
         
-        loader = Loader(name, batch_size=5, num_workers=2)
+        loader = Loader(name, batch_size=5, num_workers=2, pipelines={'label': [IntDecoder(), ToTensor()], 'image': [SimpleRGBImageDecoder(), ToTensor()]}, order=OrderOption.SEQUENTIAL)
         
         for index, images in loader:
             pass

@@ -1,3 +1,4 @@
+from ffcv.loader import OrderOption
 import string
 from ctypes import pointer
 from tempfile import NamedTemporaryFile
@@ -52,9 +53,9 @@ def run_test(n_samples):
 
         loader = Loader(name, batch_size=3, num_workers=5,
                         pipelines={
-                            'activation': [BytesDecoder()],
+                            'activations': [BytesDecoder()],
                             'index': [IntDecoder()]
-                        }
+                        }, order=OrderOption.SEQUENTIAL
         )
         ix = 0
         for _, json_encoded in loader:
